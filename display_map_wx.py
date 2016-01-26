@@ -104,7 +104,7 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
             movecost = movement_cost[self.currentmap.terrain]
 
             ## do not move to blocked tiles
-            movecost[(self.currentmap.board[1] != 0) & (self.currentmap.board[1] != unit_color)] = 888
+            movecost[(self.currentmap.board[1] != 0) & (self.currentmap.board[1] != unit_color)] = 777
 
             zoc = self.currentmap.zoc(unit_class, unit_color)
 
