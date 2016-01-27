@@ -53,9 +53,9 @@ class Terrain(object):
 type = [Terrain(*x) for x in tiledata]
 
 code2terrainid = dict((code, id) for (id, code, terrain_id, picture) in tiledata)
-def terrain_id_from_code(tile_code):
+def getTerrainID(tile_code):
     return code2terrainid[tile_code]
 
 code2tileid = dict((code, terrain_id) for (id, code, terrain_id, picture) in tiledata)
-def tile_id_from_code(tile_code):
+def getTileID(tile_code):
     return code2tileid[tile_code]

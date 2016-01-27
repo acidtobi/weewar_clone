@@ -12,6 +12,8 @@ import units
 import colors
 import maps
 import time
+import hexlib
+
 from pprint import pprint
 
 # - To move: Click a unit, wait for the movement grid to show up, click a spot, wait for the confirm grid to show up, click the spot again.
@@ -28,11 +30,29 @@ from pprint import pprint
 #   for vehicles, defence /for/ infantry, and defence /for/ vehicles. Check out the woods. A tank in the plains that attacks a tank in the woods
 #   will pwn it. An infantry in the plains that attacks an infantry in the woods will get pwned.
 
-UNSELECTED, MOVING, ATTACKING = range(3)
+UNSELECTED, MOVING, MOVING_CONFIRM, ATTACKING = range(4)
+SHADED, RED_RING, BLUE_RING = 1, 2, 4
 
 moves = np.array([[(-1, -1,), (0, -1), (-1, 0), (1, 0), (-1, 1), (0, 1)], [(0, -1,), (1, -1), (-1, 0), (1, 0), (0, 1), (1, 1)]])
 total_calls = 0
 
+def offset_to_cube(row, col):
+    # convert odd-r offset to cube
+    x = col - (row - (row & 1)) / 2
+    z = row
+    y = -x - z
+
+    return x, y, z
+
+def cube_distance(a, b):
+    (x1, y1, z1), (x2, y2, z2) = a,b
+    return (abs(x1 - x2) + abs(y1 - y2) + abs(z1 - z2)) / 2
+
+
+def getDistance(source_row, source_col, target_row, target_col):
+    a = offset_to_cube(source_row, source_col)
+    b = offset_to_cube(target_row, target_col)
+    return cube_distance(a, b)
 
 class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
@@ -42,6 +62,8 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
         self.mode = UNSELECTED
         self.overlays = np.empty_like(self.currentmap.terrain)
         self.selectedTile = None
+        self.sourceTile = None
+        self.original_board = None
 
         width_px, height_px = self.currentmap.width * 32 + 16, self.currentmap.height * 26 + 8
         wx.lib.scrolledpanel.ScrolledPanel.__init__(self, parent, size=(width_px, height_px))
@@ -68,17 +90,19 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
             if self.currentmap.terrain[rownum, colnum] > 0:
                 self.putImage(dc, "%s.png" % terrain.type[self.currentmap.terrain[rownum, colnum]].picture, rownum, colnum)
 
-            if self.overlays[rownum, colnum] == 1:
+            if self.overlays[rownum, colnum] & BLUE_RING:
                 self.putImage(dc, "selected_border_pink.png", rownum, colnum)
 
-        for rownum, row in enumerate(self.currentmap.board.swapaxes(0, 1).swapaxes(1, 2)):
-            for colnum, (unit_id, unit_color, unit_health) in enumerate(row):
-                if unit_id > 0:
-                    self.putImage(dc, "%s_%s.png" % (colors.type[unit_color].name, units.type[unit_id].picture), rownum, colnum)
-                    self.putImage(dc, "counter_%s.png" % unit_health, rownum, colnum)
+            if self.overlays[rownum, colnum] & RED_RING:
+                self.putImage(dc, "selected_border_red.png", rownum, colnum)
 
-                if self.overlays[rownum, colnum] == 2:
-                    self.putImage(dc, "selected_overlay.png", rownum, colnum)
+            unit_id, unit_color, unit_health = self.currentmap.board[:, rownum, colnum]
+            if unit_id > 0:
+                self.putImage(dc, "%s_%s.png" % (colors.type[unit_color].name, units.type[unit_id].picture), rownum, colnum)
+                self.putImage(dc, "counter_%s.png" % unit_health, rownum, colnum)
+
+            if self.overlays[rownum, colnum] & SHADED:
+                self.putImage(dc, "selected_overlay.png", rownum, colnum)
 
         del dc
         self.Refresh(eraseBackground=False)
@@ -90,7 +114,7 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
     def OnLeftUp(self, e):
 
-        row, col = getTileCoordinatesFromCursor(e.GetPosition())
+        row, col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
 
         if self.mode == UNSELECTED:
             unit_type, unit_color, unit_health = self.currentmap.board[:, row, col]
@@ -104,31 +128,39 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
             movecost = movement_cost[self.currentmap.terrain]
 
             ## do not move to blocked tiles
-            movecost[(self.currentmap.board[1] != 0) & (self.currentmap.board[1] != unit_color)] = 777
+            movecost[(self.currentmap.board[1] != 0) & (self.currentmap.board[1] != unit_color)] = 888
 
             zoc = self.currentmap.zoc(unit_class, unit_color)
 
-            shortestpath = np.ones(self.currentmap.terrain.shape, dtype=np.int64) * -1
+            visited = np.ones(self.currentmap.terrain.shape, dtype=np.int64) * -1
 
             t = time.time()
-            reachable = find_paths(shortestpath, zoc, movecost, row, col, units.type[unit_type].movementpoints)
+            reachable = find_paths(visited, zoc, movecost, row, col, units.type[unit_type].movementpoints)
             print (time.time() - t) * 1000.0
 
-            self.overlays[((reachable == -1) & (self.currentmap.terrain > 0)) | (self.currentmap.board[0] > 0)] = 2
-            self.overlays[row, col] = 0
+            self.overlays[((reachable == -1) & (self.currentmap.terrain > 0)) | (self.currentmap.board[0] > 0)] |= SHADED
+            self.overlays[row, col] = BLUE_RING
+
+            self.original_board = self.currentmap.board.copy()
 
             self.mode = MOVING
             self.selectedTile = (row, col)
+            self.sourceTile = (row, col)
             ## flip value
             #overlays[row, col] ^= 1
 
         elif self.mode == MOVING:
 
-            row, col = getTileCoordinatesFromCursor(e.GetPosition())
+            row, col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
+
+            source_row, source_col = self.sourceTile
+            print "DISTANCE:", getDistance(row, col, source_row, source_col)
+
 
             ## unselect
             if (row, col) == self.selectedTile or self.overlays[row, col] != 0:
                 self.selectedTile = None
+                self.sourceTile = None
                 self.mode = UNSELECTED
                 self.overlays[:] = 0
             else:
@@ -136,25 +168,57 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
                 source_row, source_col = self.selectedTile
                 self.currentmap.board[:, row, col] = self.currentmap.board[:, source_row, source_col]
                 self.currentmap.board[:, source_row, source_col] = 0
-                self.selectedTile = row, col
-                #self.moveUnit((source_row, source_col), (row, col))
 
-                #self.selectedTile = None
-                #self.mode = UNSELECTED
-                #self.overlays[:] = 0
+                self.selectedTile = row, col
+                self.mode = MOVING_CONFIRM
+
+                ## shade everything but target tile
+                self.overlays[self.currentmap.terrain > 0] |= SHADED
+                self.overlays[row, col] = 0
+
+        elif self.mode == MOVING_CONFIRM:
+
+            row, col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
+
+            ## unselect
+            if (row, col) != self.selectedTile:
+                ## todo moved units must be shaded
+                self.overlays[:] = 0
+
+                ## move unit back
+                source_row, source_col = self.sourceTile
+                target_row, target_col = self.selectedTile
+                self.currentmap.board[:, source_row, source_col] = self.currentmap.board[:, target_row, target_col]
+                self.currentmap.board[:, target_row, target_col] = 0
+
+                self.selectedTile = None
+                self.mode = UNSELECTED
+
+            else:
+                # move unit
+                source_row, source_col = self.sourceTile
+                self.moveUnit((source_row, source_col), (row, col))
+
+                self.mode = ATTACKING
+
+                ## attack overlay
+                self.overlays[self.currentmap.terrain > 0] |= SHADED
+                self.overlays[(self.currentmap.board[1, :, :] > 0) & (self.currentmap.board[1, :, :] != self.currentmap.board[1, row, col])] = RED_RING
+
+        elif self.mode == ATTACKING:
+            pass
 
         self.UpdateDrawingBuffered()
 
-    def getDistance(self,(source_row, source_col), (target_row, target_col)):
-        #function offset_distance(a, b):
-        #    var ac = offset_to_cube(a)
-        #    var bc = offset_to_cube(b)
-        #    return cube_distance(ac, bc)
-        pass
-
     def putImage(self, dc, img, row, col):
         png = wx.Bitmap(img)
-        return dc.DrawBitmap(png, col * 32 + (row % 2) * 16, row * 26, True)
+        target_row, target_col = hexlib.cube_to_oddr(col, 0, row)
+        target_col -= math.ceil(self.currentmap.height / 2) - 1
+
+        pixel_x, pixel_y = target_col * 32 + (target_row % 2) * 16, target_row * 26
+        b = dc.DrawBitmap(png, pixel_x, pixel_y, True)
+        #dc.DrawText("%d,%d" % (row, col), pixel_x, pixel_y)
+        return b
 
     def onExit(self, e):
         self.Close(True)
@@ -179,21 +243,18 @@ class MainFrame(wx.Frame):
 
 
 #@profile
-def find_paths(shortestpath, zoc, movecost, start_row, start_col, points_left):
+def find_paths(visited, zoc, movecost, start_row, start_col, points_left):
 
     global total_calls
     total_calls += 1
 
-    shortestpath[start_row, start_col] = points_left
+    visited[start_row, start_col] = points_left
     if points_left == 0:
-        return shortestpath
+        return visited
 
-    max_col, max_row = movecost.shape
+    max_row, max_col = movecost.shape
 
-    moves = (((-1, -1,), (0, -1), (-1, 0), (1, 0), (-1, 1), (0, 1)), ((0, -1,), (1, -1), (-1, 0), (1, 0), (0, 1), (1, 1)))
-    possible_moves = moves[start_row % 2]
-
-    for x, y in possible_moves:
+    for x, y in hexlib.neighbors:
         target_col, target_row = start_col + x, start_row + y
         if 0 <= target_row < max_row and 0 <= target_col < max_col:
 
@@ -202,28 +263,12 @@ def find_paths(shortestpath, zoc, movecost, start_row, start_col, points_left):
                 p = 0
 
             ## been there with more points left using other path
-            if shortestpath[target_row, target_col] >= p:
+            if visited[target_row, target_col] >= p:
                 continue
 
             if p >= 0:
-                find_paths(shortestpath, zoc, movecost, target_row, target_col, p)
-    return shortestpath
-
-
-def getTileCoordinatesFromCursor(coords):
-
-    x, y = coords
-    row = int(y / 26)
-    ymod = y % 26
-
-    ## "between rows"
-    if ymod <= 8:
-        xmod = (x - (row % 2) * 16) % 32
-        if (2 * (8 - ymod)) > (16 - abs(xmod - 16)):
-            row -= 1
-
-    col = int((x - (row % 2) * 16) / 32)
-    return row, col
+                find_paths(visited, zoc, movecost, target_row, target_col, p)
+    return visited
 
 app = wx.App()
 mainframe = MainFrame(None, "Weewar")

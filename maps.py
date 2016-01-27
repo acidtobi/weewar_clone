@@ -4,6 +4,7 @@ from pprint import pprint
 import terrain
 import units
 import colors
+import hexlib
 
 NONE = 0
 TERRAIN = 1
@@ -30,9 +31,7 @@ class Map(object):
 
     def zoc(self, unit_class, neutral_color):
 
-        max_col, max_row = self.terrain.shape
-
-        moves = (((-1, -1,), (0, -1), (-1, 0), (1, 0), (-1, 1), (0, 1)), ((0, -1,), (1, -1), (-1, 0), (1, 0), (0, 1), (1, 1)))
+        max_row, max_col = self.terrain.shape
 
         zoc = np.zeros_like(self.terrain)
         for color in self.units:
@@ -44,8 +43,7 @@ class Map(object):
                 if unit_class not in units.type[unit.id].has_zoc_on:
                     continue
 
-                possible_moves = moves[unit.row % 2]
-                for x, y in possible_moves:
+                for x, y in hexlib.neighbors:
                     target_col, target_row = unit.col + x, unit.row + y
                     if target_row < max_row and target_col < max_col:
                         zoc[target_row, target_col] = 1
@@ -61,13 +59,9 @@ with open("maps.cfg") as f:
 
     for line in content:
 
-        #print line, mode
-
         m = re.match("^\[([^\[\]]+)\]$", line)
         if m:
             if current_map:
-                #current_map.terrain = terrain_string
-                #current_map.board = units_string
                 maps.append(current_map)
 
             current_map = Map()
@@ -126,12 +120,14 @@ for m in maps:
     splitted_units = split_map(re.split("([A-Za-z0-9]+|\.)", m.units_string)[1::2], (m.height, m.width))
 
     # create numpy array for tiles
-    g = np.vectorize(lambda x: terrain.tile_id_from_code(x))
+    g = np.vectorize(lambda x: terrain.getTileID(x))
     m.tiles = g(np.array(splitted_map)).astype(np.int32)
+    m.tiles = hexlib.oddr_to_axial_array(m.tiles)
 
     # create numpy array for terrain
-    g = np.vectorize(lambda x: terrain.terrain_id_from_code(x))
+    g = np.vectorize(lambda x: terrain.getTerrainID(x))
     m.terrain = g(np.array(splitted_map)).astype(np.int32)
+    m.terrain = hexlib.oddr_to_axial_array(m.terrain)
 
     # create numpy array for units
     m.board = np.zeros((3, m.width, m.height), dtype=np.int32)
@@ -147,12 +143,15 @@ for m in maps:
             m.board[1, row, col] = color_id
             m.board[2, row, col] = unit_health
 
-            if color_id not in m.units:
-                m.units[color_id] = []
+    m.board = np.array([hexlib.oddr_to_axial_array(m.board[x]) for x in range(3)])
 
-            u = units.Unit(unit_id, color_id, unit_health, row, col)
-            m.units[color_id].append(u)
+    ## create units dict from numpy array
+    for row, col in np.transpose(np.nonzero(m.board[0] > 0)):
+        unit_id, unit_color, unit_health = m.board[:, row, col]
+        if unit_color not in m.units:
+            m.units[unit_color] = []
+        u = units.Unit(unit_id, unit_color, unit_health, row, col)
+        m.units[unit_color].append(u)
 
 for m in maps:
     pprint(vars(m))
-#sys.exit()
