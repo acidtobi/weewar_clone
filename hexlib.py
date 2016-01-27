@@ -3,7 +3,11 @@ from __future__ import division
 import numpy as np
 import math
 
+# oddr layout
 #moves = (((-1, -1,), (0, -1), (-1, 0), (1, 0), (-1, 1), (0, 1)), ((0, -1,), (1, -1), (-1, 0), (1, 0), (0, 1), (1, 1)))
+
+# axial layout
+#neighbors = np.array(((1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)))
 neighbors = ((1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1))
 
 # fixed to "odd-r" horizontal layout
@@ -64,8 +68,8 @@ def oddr_to_axial_array(source_array):
 
     x_offset = math.ceil(height/2) - 1
 
-    arr = np.empty((needed_rows, needed_columns), dtype=np.int32)
-    arr[:] = -1
+    arr = np.zeros((needed_rows, needed_columns), dtype=np.int64)
+    #arr[:] = -1
 
     for row in range(height):
         arr[row, x_offset - int(row / 2):x_offset - int(row / 2) + width] = source_array[row, :]

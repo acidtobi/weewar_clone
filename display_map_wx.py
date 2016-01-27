@@ -13,6 +13,7 @@ import colors
 import maps
 import time
 import hexlib
+import aux_functions
 
 from pprint import pprint
 
@@ -131,11 +132,13 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
             movecost[(self.currentmap.board[1] != 0) & (self.currentmap.board[1] != unit_color)] = 888
 
             zoc = self.currentmap.zoc(unit_class, unit_color)
+            movecost *= - ((zoc * 2) - 1)
+            print movecost
 
             visited = np.ones(self.currentmap.terrain.shape, dtype=np.int64) * -1
 
             t = time.time()
-            reachable = find_paths(visited, zoc, movecost, row, col, units.type[unit_type].movementpoints)
+            reachable = aux_functions.find_paths(visited, zoc, movecost, row, col, units.type[unit_type].movementpoints)
             print (time.time() - t) * 1000.0
 
             self.overlays[((reachable == -1) & (self.currentmap.terrain > 0)) | (self.currentmap.board[0] > 0)] |= SHADED
@@ -258,8 +261,10 @@ def find_paths(visited, zoc, movecost, start_row, start_col, points_left):
         target_col, target_row = start_col + x, start_row + y
         if 0 <= target_row < max_row and 0 <= target_col < max_col:
 
-            p = points_left - movecost[target_row, target_col]
-            if p > 0 and zoc[target_row, target_col] == 1:
+            m = movecost[target_row, target_col]
+
+            p = points_left - abs(m)
+            if p > 0 and m < 0:
                 p = 0
 
             ## been there with more points left using other path
