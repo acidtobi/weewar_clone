@@ -17,6 +17,7 @@ class HexGrid(object):
         self.width = width
         self.height = height
         self.data = {}
+        self.grid = None
 
     def __getitem__(self, coords):
         if len(coords) == 2:
@@ -41,8 +42,23 @@ class HexGrid(object):
                 if (col, row) in self.data:
                     x, y, z = oddr_to_cube(row, col)
                     arr[z, x + x_offset] = self.data[row, col]
+
+        self.grid = arr
         return arr
 
+def rings(shape, row, col, radius):
+    a = np.zeros(shape)
+    max_row, max_col = shape
+
+    target_row = row + neighbors[4][0] * radius
+    target_col = col + neighbors[4][1] * radius
+    for row_d, col_d in neighbors:
+        for offset in xrange(radius):
+            target_row += row_d
+            target_col += col_d
+            if target_row < max_row and target_col < max_col:
+                a[target_row, target_col] = 1
+    return a
 
 # convert cube to odd-r offset
 def cube_to_oddr(x, y, z):
