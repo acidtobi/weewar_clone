@@ -68,10 +68,11 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
         width_px, height_px = self.currentmap.width * 32 + 16, self.currentmap.height * 26 + 8
         wx.lib.scrolledpanel.ScrolledPanel.__init__(self, parent, size=(width_px, height_px))
+        self.SetBackgroundColour("#F0F0F0")
         self.SetupScrolling()
 
-        Size = self.ClientSize
-        self._Buffer = wx.EmptyBitmap(*Size)
+        #size = self.ClientSize
+        self._Buffer = wx.EmptyBitmap(width_px, height_px)
         self.UpdateDrawingBuffered()
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -241,9 +242,30 @@ class MainFrame(wx.Frame):
         #screenWidth = screenSize[0]
         #screenHeight = screenSize[1]
 
-        wx.Frame.__init__(self, parent, title=title, size=(600, 600))
+        wx.Frame.__init__(self, parent, title=title, size=(600, 400))
         self.panel = MapPanel(self, maps.maps[0]) # , pos=(200, 200)
 
+        panel2 = wx.Panel(self, -1, size=(200, -1))
+        panel2.SetBackgroundColour("WHITE")
+
+        wx.Button(panel2, -1, "stay here")
+
+        self.box = wx.BoxSizer(wx.HORIZONTAL)
+        self.box.Add(self.panel, 2, wx.EXPAND)
+        self.box.Add(panel2, 0, wx.EXPAND)
+
+        self.SetAutoLayout(True)
+        self.SetSizer(self.box)
+        self.Layout()
+
+        width_px, height_px = self.panel.currentmap.width * 32 + 16, self.panel.currentmap.height * 26 + 8
+        self.panel.Size = width_px, height_px
+
+        self.Bind(wx.EVT_SIZE, self.printSize)
+
+    def printSize(self, e):
+        e.Skip()
+        print [x.GetSize() for x in self.box.Children]
 
 #@profile
 def find_paths(visited, zoc, movecost, start_row, start_col, points_left):
