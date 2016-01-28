@@ -37,23 +37,39 @@ SHADED, RED_RING, BLUE_RING = 1, 2, 4
 moves = np.array([[(-1, -1,), (0, -1), (-1, 0), (1, 0), (-1, 1), (0, 1)], [(0, -1,), (1, -1), (-1, 0), (1, 0), (0, 1), (1, 1)]])
 total_calls = 0
 
-def offset_to_cube(row, col):
-    # convert odd-r offset to cube
-    x = col - (row - (row & 1)) / 2
-    z = row
-    y = -x - z
+class MainFrame(wx.Frame):
 
-    return x, y, z
+    def __init__(self, parent, title):
 
-def cube_distance(a, b):
-    (x1, y1, z1), (x2, y2, z2) = a,b
-    return (abs(x1 - x2) + abs(y1 - y2) + abs(z1 - z2)) / 2
+        #First retrieve the screen size of the device
+        #screenSize = wx.DisplaySize()
+        #screenWidth = screenSize[0]
+        #screenHeight = screenSize[1]
 
+        wx.Frame.__init__(self, parent, title=title, size=(600, 400))
+        self.panel = MapPanel(self, maps.maps[0]) # , pos=(200, 200)
 
-def getDistance(source_row, source_col, target_row, target_col):
-    a = offset_to_cube(source_row, source_col)
-    b = offset_to_cube(target_row, target_col)
-    return cube_distance(a, b)
+        panel2 = wx.Panel(self, -1, size=(200, -1))
+        panel2.SetBackgroundColour("WHITE")
+
+        wx.Button(panel2, -1, "stay here")
+
+        self.box = wx.BoxSizer(wx.HORIZONTAL)
+        self.box.Add(self.panel, 2, wx.EXPAND)
+        self.box.Add(panel2, 0, wx.EXPAND)
+
+        self.SetAutoLayout(True)
+        self.SetSizer(self.box)
+        self.Layout()
+
+        width_px, height_px = self.panel.currentmap.width * 32 + 16, self.panel.currentmap.height * 26 + 8
+        self.panel.Size = width_px, height_px
+
+        self.Bind(wx.EVT_SIZE, self.printSize)
+
+    def printSize(self, e):
+        e.Skip()
+        print [x.GetSize() for x in self.box.Children]
 
 class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
@@ -61,7 +77,7 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
         self.currentmap = currentmap
         self.mode = UNSELECTED
-        self.overlays = np.empty_like(self.currentmap.terrain)
+        self.overlays = np.zeros_like(self.currentmap.terrain)
         self.selectedTile = None
         self.sourceTile = None
         self.original_board = None
@@ -77,6 +93,7 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_MOTION, self.OnMove)
 
     def OnPaint(self, e):
         dc = wx.PaintDC(self)
@@ -113,6 +130,12 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 #    def onMouseMove(self, event):
 #        self.panel.SetFocus()
 #        print event
+
+    def OnMove(self, e):
+
+        row, col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
+        print row, col
+
 
     def OnLeftUp(self, e):
 
@@ -163,6 +186,9 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
             ## unselect
             if (row, col) == self.selectedTile or self.overlays[row, col] != 0:
+
+                print "self.overlays[row, col] = ", self.overlays[row, col]
+
                 self.selectedTile = None
                 self.sourceTile = None
                 self.mode = UNSELECTED
@@ -207,7 +233,8 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
                 ## attack overlay
                 self.overlays[self.currentmap.terrain > 0] |= SHADED
-                self.overlays[(self.currentmap.board[1, :, :] > 0) & (self.currentmap.board[1, :, :] != self.currentmap.board[1, row, col])] = RED_RING
+                attackable = hexlib.rings(self.currentmap.terrain.shape, row, col, 1)
+                self.overlays[(attackable > 0) & (self.currentmap.board[1, :, :] > 0) & (self.currentmap.board[1, :, :] != self.currentmap.board[1, row, col])] = RED_RING
 
         elif self.mode == ATTACKING:
             pass
@@ -233,69 +260,23 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
                 if (u.row, u.col) == (source_row, source_col):
                     u.row, u.col = target_row, target_col
 
-class MainFrame(wx.Frame):
+def offset_to_cube(row, col):
+    # convert odd-r offset to cube
+    x = col - (row - (row & 1)) / 2
+    z = row
+    y = -x - z
 
-    def __init__(self, parent, title):
+    return x, y, z
 
-        #First retrieve the screen size of the device
-        #screenSize = wx.DisplaySize()
-        #screenWidth = screenSize[0]
-        #screenHeight = screenSize[1]
+def cube_distance(a, b):
+    (x1, y1, z1), (x2, y2, z2) = a,b
+    return (abs(x1 - x2) + abs(y1 - y2) + abs(z1 - z2)) / 2
 
-        wx.Frame.__init__(self, parent, title=title, size=(600, 400))
-        self.panel = MapPanel(self, maps.maps[0]) # , pos=(200, 200)
 
-        panel2 = wx.Panel(self, -1, size=(200, -1))
-        panel2.SetBackgroundColour("WHITE")
-
-        wx.Button(panel2, -1, "stay here")
-
-        self.box = wx.BoxSizer(wx.HORIZONTAL)
-        self.box.Add(self.panel, 2, wx.EXPAND)
-        self.box.Add(panel2, 0, wx.EXPAND)
-
-        self.SetAutoLayout(True)
-        self.SetSizer(self.box)
-        self.Layout()
-
-        width_px, height_px = self.panel.currentmap.width * 32 + 16, self.panel.currentmap.height * 26 + 8
-        self.panel.Size = width_px, height_px
-
-        self.Bind(wx.EVT_SIZE, self.printSize)
-
-    def printSize(self, e):
-        e.Skip()
-        print [x.GetSize() for x in self.box.Children]
-
-#@profile
-def find_paths(visited, zoc, movecost, start_row, start_col, points_left):
-
-    global total_calls
-    total_calls += 1
-
-    visited[start_row, start_col] = points_left
-    if points_left == 0:
-        return visited
-
-    max_row, max_col = movecost.shape
-
-    for x, y in hexlib.neighbors:
-        target_col, target_row = start_col + x, start_row + y
-        if 0 <= target_row < max_row and 0 <= target_col < max_col:
-
-            m = movecost[target_row, target_col]
-
-            p = points_left - abs(m)
-            if p > 0 and m < 0:
-                p = 0
-
-            ## been there with more points left using other path
-            if visited[target_row, target_col] >= p:
-                continue
-
-            if p >= 0:
-                find_paths(visited, zoc, movecost, target_row, target_col, p)
-    return visited
+def getDistance(source_row, source_col, target_row, target_col):
+    a = offset_to_cube(source_row, source_col)
+    b = offset_to_cube(target_row, target_col)
+    return cube_distance(a, b)
 
 app = wx.App()
 mainframe = MainFrame(None, "Weewar")
