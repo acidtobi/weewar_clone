@@ -112,6 +112,18 @@ def pixel_to_hexcoords(coords, width, height):
 
     return z, x
 
+def hexcoords_to_pixel(coords, width, height):
+
+    row, col = coords
+    row, col = cube_to_oddr(col, 0, row)
+    col -= math.ceil(height / 2) - 1
+
+    y = row * 26 + 17
+    x = col * 32 + (row & 1) * 16 + 16
+
+    return x, y
+
+
 #h = HexGrid(6, 6)
 #
 #for row in range(6):

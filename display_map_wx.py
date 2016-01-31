@@ -1,12 +1,9 @@
 from __future__ import division
 
 import wx
-import random
 import wx.lib.scrolledpanel
-import re
 import math
 import numpy as np
-import sys
 import terrain
 import units
 import colors
@@ -14,6 +11,7 @@ import maps
 import time
 import hexlib
 import aux_functions
+from battleresult import BattleResultPanel
 
 from pprint import pprint
 
@@ -37,6 +35,7 @@ SHADED, RED_RING, BLUE_RING = 1, 2, 4
 moves = np.array([[(-1, -1,), (0, -1), (-1, 0), (1, 0), (-1, 1), (0, 1)], [(0, -1,), (1, -1), (-1, 0), (1, 0), (0, 1), (1, 1)]])
 total_calls = 0
 
+
 class MainFrame(wx.Frame):
 
     def __init__(self, parent, title):
@@ -46,30 +45,49 @@ class MainFrame(wx.Frame):
         #screenWidth = screenSize[0]
         #screenHeight = screenSize[1]
 
-        wx.Frame.__init__(self, parent, title=title, size=(600, 400))
-        self.panel = MapPanel(self, maps.maps[0]) # , pos=(200, 200)
+        wx.Frame.__init__(self, parent, title=title, size=(800, 400))
 
-        panel2 = wx.Panel(self, -1, size=(200, -1))
-        panel2.SetBackgroundColour("WHITE")
+        self._mappanel = wx.Panel(self, -1)
+        self.mappanel = MapPanel(self, maps.maps[0]) # , pos=(200, 200)
 
-        wx.Button(panel2, -1, "stay here")
+        leftpanel = wx.Panel(self, -1, size=(200, -1))
+        leftpanel.SetBackgroundColour("WHITE")
+
+        toppanel = wx.Panel(self, -1, size=(-1, 50))
+        toppanel.SetBackgroundColour("WHITE")
+
+        btn_stayhere = wx.Button(toppanel, -1, "stay here")
 
         self.box = wx.BoxSizer(wx.HORIZONTAL)
-        self.box.Add(self.panel, 2, wx.EXPAND)
-        self.box.Add(panel2, 0, wx.EXPAND)
+        self.box.Add(leftpanel, 0, wx.EXPAND)
+        self.box.Add(self.mappanel, 2, wx.EXPAND)
+
+        self.box2 = wx.BoxSizer(wx.VERTICAL)
+        self.box2.Add(toppanel, 0, wx.EXPAND)
+        self.box2.Add(self.box, 2, wx.EXPAND)
+
+        self.battle_result_panel = BattleResultPanel(self.mappanel)
+        self.battle_result_panel.SetBackgroundColour("WHITE")
+        self.battle_result_panel.Hide()
 
         self.SetAutoLayout(True)
-        self.SetSizer(self.box)
+#        self.SetSizer(self.box)
+        self.SetSizer(self.box2)
         self.Layout()
 
-        width_px, height_px = self.panel.currentmap.width * 32 + 16, self.panel.currentmap.height * 26 + 8
-        self.panel.Size = width_px, height_px
+        width_px, height_px = self.mappanel.currentmap.width * 32 + 16, self.mappanel.currentmap.height * 26 + 8
+        self._mappanel.Size = width_px, height_px
+        self.mappanel.Size = width_px, height_px
 
         self.Bind(wx.EVT_SIZE, self.printSize)
+        btn_stayhere.Bind(wx.EVT_LEFT_UP, self.battle_result_panel._showBattleResult)
 
     def printSize(self, e):
         e.Skip()
-        print [x.GetSize() for x in self.box.Children]
+        self.battle_result_panel.CentreOnParent()
+        self.mappanel.CentreOnParent()
+        print [(x, x.GetSize()) for x in self.box.Children]
+
 
 class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
@@ -81,6 +99,7 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
         self.selectedTile = None
         self.sourceTile = None
         self.original_board = None
+        self.arrows = []
 
         width_px, height_px = self.currentmap.width * 32 + 16, self.currentmap.height * 26 + 8
         wx.lib.scrolledpanel.ScrolledPanel.__init__(self, parent, size=(width_px, height_px))
@@ -110,7 +129,7 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
                 self.putImage(dc, "%s.png" % terrain.type[self.currentmap.terrain[rownum, colnum]].picture, rownum, colnum)
 
             if self.overlays[rownum, colnum] & BLUE_RING:
-                self.putImage(dc, "selected_border_pink.png", rownum, colnum)
+                self.putImage(dc, "selected_border_blue.png", rownum, colnum)
 
             if self.overlays[rownum, colnum] & RED_RING:
                 self.putImage(dc, "selected_border_red.png", rownum, colnum)
@@ -123,9 +142,45 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
             if self.overlays[rownum, colnum] & SHADED:
                 self.putImage(dc, "selected_overlay.png", rownum, colnum)
 
+        gc = wx.GraphicsContext.Create(dc)
+        gc.SetAntialiasMode(True)
+        for x in self.arrows:
+            print x
+            coords1, coords2, width, color = x
+            self.drawArrow(gc, coords1, coords2, width, color)
+
+        #self.showBattleResult(gc, 1, 2, 0, 10, 2, 5, 5, 3)
+
         del dc
         self.Refresh(eraseBackground=False)
         self.Update()
+
+    def drawArrow(self, gc, coords1, coords2, width, color):
+
+        c1, c2 = np.array(coords1), np.array(coords2)
+        c3 = c1 - c2
+        l = math.sqrt(c3[0]**2 + c3[1]**2)
+
+        ## stop 15 pixels short of target
+        c2 = c2 + (c3 / l) * 12
+
+        norm = c3 / l * width / 2
+        ortho = np.array((c3[1], -c3[0])) / l * width / 2
+
+        gc.SetBrush(wx.Brush(color, wx.SOLID))
+        gc.SetPen(wx.Pen("#000000", 1, wx.SOLID))
+        #gc.SetPen(wx.TRANSPARENT_PEN)
+        gc.DrawLines([c1 - ortho,
+                      c1 + ortho,
+                      c2 + ortho + (5 * norm),
+                      c2 + 3 * ortho + (5 * norm),
+                      c2,
+                      c2 - 3 * ortho + (5 * norm),
+                      c2 - ortho + (5 * norm),
+                      c1 - ortho])
+
+        font = wx.Font(24, wx.DEFAULT, wx.NORMAL, wx.BOLD)
+        gc.SetFont(font, wx.BLACK)
 
 #    def onMouseMove(self, event):
 #        self.panel.SetFocus()
@@ -135,7 +190,6 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
         row, col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
         print row, col
-
 
     def OnLeftUp(self, e):
 
@@ -183,8 +237,7 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
             source_row, source_col = self.sourceTile
             print "DISTANCE:", getDistance(row, col, source_row, source_col)
 
-
-            ## unselect
+            ## deselect
             if (row, col) == self.selectedTile or self.overlays[row, col] != 0:
 
                 print "self.overlays[row, col] = ", self.overlays[row, col]
@@ -192,6 +245,7 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
                 self.selectedTile = None
                 self.sourceTile = None
                 self.mode = UNSELECTED
+                self.arrows = []
                 self.overlays[:] = 0
             else:
                 # move unit
@@ -206,13 +260,18 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
                 self.overlays[self.currentmap.terrain > 0] |= SHADED
                 self.overlays[row, col] = 0
 
+                source_coords = hexlib.hexcoords_to_pixel(self.sourceTile, self.currentmap.width, self.currentmap.height)
+                target_coords = hexlib.hexcoords_to_pixel((row, col), self.currentmap.width, self.currentmap.height)
+
+                self.arrows = [(source_coords, target_coords, 5, "#80b3ff")]
+
         elif self.mode == MOVING_CONFIRM:
 
             row, col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
 
             ## unselect
             if (row, col) != self.selectedTile:
-                ## todo moved units must be shaded
+                ## todo: moved units must be shaded
                 self.overlays[:] = 0
 
                 ## move unit back
@@ -223,6 +282,7 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
                 self.selectedTile = None
                 self.mode = UNSELECTED
+                self.arrows = []
 
             else:
                 # move unit
