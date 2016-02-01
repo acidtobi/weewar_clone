@@ -297,7 +297,20 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
                 self.overlays[(attackable > 0) & (self.currentmap.board[1, :, :] > 0) & (self.currentmap.board[1, :, :] != self.currentmap.board[1, row, col])] = RED_RING
 
         elif self.mode == ATTACKING:
-            pass
+
+            defending_row, defending_col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
+            attacking_row, attacking_col = self.selectedTile
+
+            defending_type, defending_color, defending_health = self.currentmap.board[:, defending_row, defending_col]
+            attacking_type, attacking_color, attacking_health = self.currentmap.board[:, attacking_row, attacking_col]
+
+            print attacking_type, attacking_color, attacking_health
+            print defending_type, defending_color, defending_health
+
+            defending_left = defending_health - 1
+            attacking_left = attacking_health - 1
+
+            self.GetParent().battle_result_panel.showBattleResult(attacking_color, attacking_type, 1, attacking_left, defending_color, defending_type, 1, defending_left)
 
         self.UpdateDrawingBuffered()
 

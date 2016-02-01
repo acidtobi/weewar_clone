@@ -20,13 +20,13 @@ class BattleResultPanel(wx.Panel):
 
         wx.Panel.__init__(self, parent, style=wx.RAISED_BORDER, size=(width_px, height_px))
 
-        btn_continue = wx.Button(self, -1, "Continue game", (70, 145))
-        btn_continue.SetBackgroundColour('#0000FF')
+        self.btn_continue = wx.Button(self, -1, "Continue game", (70, 145))
+        self.btn_continue.SetBackgroundColour('#0000FF')
 
         self._Buffer = wx.EmptyBitmap(width_px, height_px)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_LEFT_UP, self.onClick)
-        btn_continue.Bind(wx.EVT_LEFT_UP, self.onClick)
+        self.btn_continue.Bind(wx.EVT_LEFT_UP, self.onClick)
 
     def onClick(self, e):
         self.Hide()
@@ -64,17 +64,20 @@ class BattleResultPanel(wx.Panel):
         self.putCenteredText(gc, "Player", 10, wx.BLACK, wx.BOLD, border + (rect_size / 2), rect_y_pos + 15)
         self.putCenteredText(gc, "AI", 10, wx.BLACK, wx.BOLD, width - border - (rect_size / 2), rect_y_pos + 15)
 
-        self.putCenteredText(gc, "-10", 14, wx.RED, wx.BOLD, border + rect_size - 30, rect_y_pos + (rect_size / 2))
-        self.putCenteredText(gc, "-2", 14, wx.RED, wx.BOLD, width - border - 30, rect_y_pos + (rect_size / 2))
+        self.putCenteredText(gc, "%d" % -self.attacking_lost, 14, wx.RED, wx.BOLD, border + rect_size - 30, rect_y_pos + (rect_size / 2))
+        self.putCenteredText(gc, "%d" % -self.defending_lost, 14, wx.RED, wx.BOLD, width - border - 30, rect_y_pos + (rect_size / 2))
 
-        self.putCenteredText(gc, "0 units left", 8, wx.BLACK, wx.NORMAL, border + (rect_size / 2), rect_y_pos + rect_size - 15)
-        self.putCenteredText(gc, "2 units left", 8, wx.BLACK, wx.NORMAL, width - border - (rect_size / 2), rect_y_pos + rect_size - 15)
+        self.putCenteredText(gc, "%d units left" % self.attacking_left, 8, wx.BLACK, wx.NORMAL, border + (rect_size / 2), rect_y_pos + rect_size - 15)
+        self.putCenteredText(gc, "%d units left" % self.defending_left, 8, wx.BLACK, wx.NORMAL, width - border - (rect_size / 2), rect_y_pos + rect_size - 15)
+
+        button_width, button_height = self.btn_continue.GetVirtualSize()
+        self.btn_continue.SetPosition(((width - button_width) / 2, 135 + (55 - button_height) / 2))
 
         del dc
         self.Refresh(eraseBackground=False)
         self.Update()
 
-    def _showBattleResult(self, e):
+    def _showBattleResult(self):
         if self.IsShown():
             self.Hide()
         else:
@@ -82,13 +85,17 @@ class BattleResultPanel(wx.Panel):
             self.Show()
 
     def showBattleResult(self, attacking_color, attacking_type, attacking_lost, attacking_left, defending_color, defending_type, defending_lost, defending_left):
+
+        if not self.IsShown():
+            self.Show()
+
         self.attacking_color = attacking_color
         self.attacking_type = attacking_type
         self.attacking_lost = attacking_lost
         self.attacking_left = attacking_left
         self.defending_color = defending_color
         self.defending_type = defending_type
-        self. defending_lost = defending_lost
+        self.defending_lost = defending_lost
         self.defending_left = defending_left
         self.UpdateDrawingBuffered()
 
