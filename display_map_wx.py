@@ -80,8 +80,8 @@ class MainFrame(wx.Frame):
         self.mappanel.Size = width_px, height_px
 
         self.Bind(wx.EVT_SIZE, self.printSize)
-        toppanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="upper_bar.png": self.createBackgroundImage(evt, temp))
-        leftpanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="left_bar.png": self.createBackgroundImage(evt, temp))
+        #toppanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="upper_bar.png": self.createBackgroundImage(evt, temp))
+        #leftpanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="left_bar.png": self.createBackgroundImage(evt, temp))
         #btn_stayhere.Bind(wx.EVT_LEFT_UP, self.battle_result_panel._showBattleResult)
 
     def createBackgroundImage(self, evt, img):
@@ -99,7 +99,7 @@ class MainFrame(wx.Frame):
     def printSize(self, e):
         e.Skip()
         self.battle_result_panel.CentreOnParent()
-        self.mappanel.CentreOnParent()
+        #self.mappanel.CentreOnParent()
         print [(x, x.GetSize()) for x in self.box.Children]
 
 
@@ -129,9 +129,19 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
         self.Bind(wx.EVT_MOTION, self.OnMove)
 
     def OnPaint(self, e):
-        dc = wx.PaintDC(self)
-        dc.DrawBitmap(self._Buffer, 0, 0)
 
+        dc = wx.PaintDC(self)
+        #dc.Clear()
+
+        self_width, self_height = self._Buffer.Size
+        sizer_width, sizer_height = self.Size
+
+        #posx = max(0, (sizer_width - self_width) / 2)
+        #posy = max(0, (sizer_height - self_height) / 2)
+        #self.SetPosition((posx, posy))
+
+        x, y = self.CalcScrolledPosition((0, 0))
+        dc.DrawBitmap(self._Buffer, x, y)
 
     def UpdateDrawingBuffered(self):
 
