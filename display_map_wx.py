@@ -45,18 +45,18 @@ class MainFrame(wx.Frame):
         #screenWidth = screenSize[0]
         #screenHeight = screenSize[1]
 
-        wx.Frame.__init__(self, parent, title=title, size=(800, 400))
+        wx.Frame.__init__(self, parent, title=title, size=(800, 700))
 
         self._mappanel = wx.Panel(self, -1)
         self.mappanel = MapPanel(self, maps.maps[0]) # , pos=(200, 200)
 
-        leftpanel = wx.Panel(self, -1, size=(200, -1))
+        leftpanel = wx.Panel(self, -1, size=(340, -1))
         leftpanel.SetBackgroundColour("WHITE")
 
-        toppanel = wx.Panel(self, -1, size=(-1, 50))
+        toppanel = wx.Panel(self, -1, size=(-1, 40))
         toppanel.SetBackgroundColour("WHITE")
 
-        btn_stayhere = wx.Button(toppanel, -1, "stay here")
+        #btn_stayhere = wx.Button(toppanel, -1, "stay here")
 
         self.box = wx.BoxSizer(wx.HORIZONTAL)
         self.box.Add(leftpanel, 0, wx.EXPAND)
@@ -80,7 +80,21 @@ class MainFrame(wx.Frame):
         self.mappanel.Size = width_px, height_px
 
         self.Bind(wx.EVT_SIZE, self.printSize)
-        btn_stayhere.Bind(wx.EVT_LEFT_UP, self.battle_result_panel._showBattleResult)
+        toppanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="upper_bar.png": self.createBackgroundImage(evt, temp))
+        leftpanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="left_bar.png": self.createBackgroundImage(evt, temp))
+        #btn_stayhere.Bind(wx.EVT_LEFT_UP, self.battle_result_panel._showBattleResult)
+
+    def createBackgroundImage(self, evt, img):
+
+        dc = evt.GetDC()
+        if not dc:
+            dc = wx.ClientDC(self)
+            rect = self.GetUpdateRegion().GetBox()
+            dc.SetClippingRect(rect)
+
+        dc.Clear()
+        bmp = wx.Bitmap(img)
+        dc.DrawBitmap(bmp, 0, 0)
 
     def printSize(self, e):
         e.Skip()
@@ -118,11 +132,17 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
         dc = wx.PaintDC(self)
         dc.DrawBitmap(self._Buffer, 0, 0)
 
+
     def UpdateDrawingBuffered(self):
 
         dc = wx.MemoryDC()
         dc.SelectObject(self._Buffer)
         dc.Clear()
+
+        dc.SetBrush(wx.Brush("#F0F0F0", wx.SOLID))
+        dc.SetPen(wx.TRANSPARENT_PEN)
+        width, height = self.Size
+        dc.DrawRectangle(0, 0, width, height)
 
         for (rownum, colnum), value in np.ndenumerate(self.currentmap.tiles):
             if self.currentmap.terrain[rownum, colnum] > 0:
@@ -134,6 +154,7 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
             if self.overlays[rownum, colnum] & RED_RING:
                 self.putImage(dc, "selected_border_red.png", rownum, colnum)
 
+        for (rownum, colnum), value in np.ndenumerate(self.currentmap.tiles):
             unit_id, unit_color, unit_health = self.currentmap.board[:, rownum, colnum]
             if unit_id > 0:
                 self.putImage(dc, "%s_%s.png" % (colors.type[unit_color].name, units.type[unit_id].picture), rownum, colnum)
@@ -210,13 +231,14 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
             movecost[(self.currentmap.board[1] != 0) & (self.currentmap.board[1] != unit_color)] = 888
 
             zoc = self.currentmap.zoc(unit_class, unit_color)
-            movecost *= - ((zoc * 2) - 1)
+            #movecost *= - ((zoc * 2) - 1)
             print movecost
 
             visited = np.ones(self.currentmap.terrain.shape, dtype=np.int64) * -1
 
+            can_move = units.type[unit_type].movementpoints[0]
             t = time.time()
-            reachable = aux_functions.find_paths(visited, zoc, movecost, row, col, units.type[unit_type].movementpoints)
+            reachable = aux_functions.find_paths(visited, zoc, movecost, row, col, can_move)
             print (time.time() - t) * 1000.0
 
             self.overlays[((reachable == -1) & (self.currentmap.terrain > 0)) | (self.currentmap.board[0] > 0)] |= SHADED
@@ -293,8 +315,11 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
                 ## attack overlay
                 self.overlays[self.currentmap.terrain > 0] |= SHADED
-                attackable = hexlib.rings(self.currentmap.terrain.shape, row, col, 1)
-                self.overlays[(attackable > 0) & (self.currentmap.board[1, :, :] > 0) & (self.currentmap.board[1, :, :] != self.currentmap.board[1, row, col])] = RED_RING
+
+                unit_type, unit_color, unit_health = self.currentmap.board[:, row, col]
+                min_range, max_range = units.type[unit_type].attackrange
+                attackable = sum([hexlib.rings(self.currentmap.terrain.shape, row, col, x) for x in range(min_range, max_range + 1)])
+                self.overlays[(attackable > 0) & (self.currentmap.board[1, :, :] > 0) & (self.currentmap.board[1, :, :] != unit_color)] = RED_RING
 
         elif self.mode == ATTACKING:
 
