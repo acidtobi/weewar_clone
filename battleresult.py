@@ -21,7 +21,7 @@ class BattleResultPanel(wx.Panel):
         wx.Panel.__init__(self, parent, style=wx.RAISED_BORDER, size=(width_px, height_px))
 
         self.btn_continue = wx.Button(self, -1, "Continue game", (70, 145))
-        self.btn_continue.SetBackgroundColour('#0000FF')
+        self.btn_continue.SetBackgroundColour('#cce5ff')
 
         self._Buffer = wx.EmptyBitmap(width_px, height_px)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
