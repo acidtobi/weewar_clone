@@ -12,6 +12,7 @@ import time
 import hexlib
 import aux_functions
 from battleresult import BattleResultPanel
+import os
 
 from pprint import pprint
 
@@ -80,8 +81,12 @@ class MainFrame(wx.Frame):
         self.mappanel.Size = width_px, height_px
 
         self.Bind(wx.EVT_SIZE, self.printSize)
-        toppanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="upper_bar.png": self.createBackgroundImage(evt, temp))
-        leftpanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="left_bar.png": self.createBackgroundImage(evt, temp))
+
+        if os.path.isfile("upper_bar.png"):
+            toppanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="upper_bar.png": self.createBackgroundImage(evt, temp))
+
+        if os.path.isfile("left_bar.png"):
+            leftpanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="left_bar.png": self.createBackgroundImage(evt, temp))
         #btn_stayhere.Bind(wx.EVT_LEFT_UP, self.battle_result_panel._showBattleResult)
 
     def createBackgroundImage(self, evt, img):
@@ -164,9 +169,10 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
         width, height = self.Size
         dc.DrawRectangle(0, 0, width, height)
 
-        for rownum in range(-15, 25):
-            for colnum in range(-15, 25):
-                self.putImage(dc, "logo_background.png", rownum, colnum)
+        if os.path.isfile("logo_background.png"):
+            for rownum in range(-15, 25):
+                for colnum in range(-15, 25):
+                    self.putImage(dc, "logo_background.png", rownum, colnum)
 
         for (rownum, colnum), value in np.ndenumerate(self.currentmap.tiles):
             if self.currentmap.terrain[rownum, colnum] > 0:
