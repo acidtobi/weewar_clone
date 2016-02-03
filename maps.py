@@ -130,7 +130,7 @@ for m in maps:
     m.terrain = hexlib.oddr_to_axial_array(m.terrain)
 
     # create numpy array for units
-    m.board = np.zeros((3, m.width, m.height), dtype=np.int32)
+    m.board = np.zeros((3, m.height, m.width), dtype=np.int32)
     for (row, col), unit_code in np.ndenumerate(np.array(splitted_units)):
         if unit_code != ".":
             unit_id = units.id_from_code(unit_code[0:2])

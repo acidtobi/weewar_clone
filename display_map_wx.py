@@ -45,7 +45,7 @@ class MainFrame(wx.Frame):
         #screenWidth = screenSize[0]
         #screenHeight = screenSize[1]
 
-        wx.Frame.__init__(self, parent, title=title, size=(800, 700))
+        wx.Frame.__init__(self, parent, title=title, size=(800, 650))
 
         self._mappanel = wx.Panel(self, -1)
         self.mappanel = MapPanel(self, maps.maps[0]) # , pos=(200, 200)
@@ -80,8 +80,8 @@ class MainFrame(wx.Frame):
         self.mappanel.Size = width_px, height_px
 
         self.Bind(wx.EVT_SIZE, self.printSize)
-        #toppanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="upper_bar.png": self.createBackgroundImage(evt, temp))
-        #leftpanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="left_bar.png": self.createBackgroundImage(evt, temp))
+        toppanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="upper_bar.png": self.createBackgroundImage(evt, temp))
+        leftpanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="left_bar.png": self.createBackgroundImage(evt, temp))
         #btn_stayhere.Bind(wx.EVT_LEFT_UP, self.battle_result_panel._showBattleResult)
 
     def createBackgroundImage(self, evt, img):
@@ -99,7 +99,7 @@ class MainFrame(wx.Frame):
     def printSize(self, e):
         e.Skip()
         self.battle_result_panel.CentreOnParent()
-        #self.mappanel.CentreOnParent()
+        self.mappanel.OnResize(e)
         print [(x, x.GetSize()) for x in self.box.Children]
 
 
@@ -119,9 +119,10 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
         wx.lib.scrolledpanel.ScrolledPanel.__init__(self, parent, size=(width_px, height_px))
         self.SetBackgroundColour("#F0F0F0")
         self.SetupScrolling()
+        self.SetScrollRate(1,1)
 
         #size = self.ClientSize
-        self._Buffer = wx.EmptyBitmap(width_px, height_px)
+        self._Buffer = wx.EmptyBitmap(width_px+500, height_px+500)
         self.UpdateDrawingBuffered()
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -133,15 +134,24 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
         dc = wx.PaintDC(self)
         #dc.Clear()
 
-        self_width, self_height = self._Buffer.Size
-        sizer_width, sizer_height = self.Size
-
-        #posx = max(0, (sizer_width - self_width) / 2)
-        #posy = max(0, (sizer_height - self_height) / 2)
-        #self.SetPosition((posx, posy))
-
         x, y = self.CalcScrolledPosition((0, 0))
         dc.DrawBitmap(self._Buffer, x, y)
+
+    def OnResize(self, e):
+
+        self_width, self_height = self._Buffer.Size
+        sizer_width, sizer_height = self.GetParent().Size
+
+        posx = max(0, (sizer_width - self_width) / 2)
+        posy = max(0, (sizer_height - self_height) / 2)
+
+        self_width = min(self_width, sizer_width)
+        self_height = min(self_height, sizer_height)
+        #self.SetSize((self_width, self_height))
+
+        self.SetVirtualSize((600, 400))
+
+        self.SetPosition((posx, posy))
 
     def UpdateDrawingBuffered(self):
 
@@ -154,6 +164,10 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
         width, height = self.Size
         dc.DrawRectangle(0, 0, width, height)
 
+        for rownum in range(-15, 25):
+            for colnum in range(-15, 25):
+                self.putImage(dc, "logo_background.png", rownum, colnum)
+
         for (rownum, colnum), value in np.ndenumerate(self.currentmap.tiles):
             if self.currentmap.terrain[rownum, colnum] > 0:
                 self.putImage(dc, "%s.png" % terrain.type[self.currentmap.terrain[rownum, colnum]].picture, rownum, colnum)
@@ -165,6 +179,7 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
                 self.putImage(dc, "selected_border_red.png", rownum, colnum)
 
         for (rownum, colnum), value in np.ndenumerate(self.currentmap.tiles):
+            print (rownum, colnum), value
             unit_id, unit_color, unit_health = self.currentmap.board[:, rownum, colnum]
             if unit_id > 0:
                 self.putImage(dc, "%s_%s.png" % (colors.type[unit_color].name, units.type[unit_id].picture), rownum, colnum)
