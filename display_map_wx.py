@@ -79,7 +79,7 @@ class MainFrame(wx.Frame):
         width_px, height_px = self.mappanel.currentmap.width * 32 + 16, self.mappanel.currentmap.height * 26 + 8
         self.mappanel.Size = width_px, height_px
 
-        #self.Bind(wx.EVT_SIZE, self.printSize)
+        self.Bind(wx.EVT_SIZE, self.OnResize)
 
         if os.path.isfile("upper_bar.png"):
             toppanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="upper_bar.png": self.createBackgroundImage(evt, temp))
@@ -100,12 +100,11 @@ class MainFrame(wx.Frame):
         bmp = wx.Bitmap(img)
         dc.DrawBitmap(bmp, 0, 0)
 
-    #def printSize(self, e):
-    #    e.Skip()
-    #    self.battle_result_panel.CentreOnParent()
-    #    self.mappanel.OnResize(e)
-    #    print [(x, x.GetSize()) for x in self.box.Children]
+    def OnResize(self, e):
+        self.battle_result_panel.CentreOnParent()
 
+        ## skip this event handler so that OnResize of superclass is called too
+        e.Skip()
 
 class MapPanelWrapper(MapPanel):
 
@@ -127,19 +126,17 @@ class MapPanelWrapper(MapPanel):
         self.SetScrollRate(1, 1)
 
         ## create buffer with mask
-        self._Buffer = wx.BitmapFromBufferRGBA(width_px, height_px, np.ones((width_px, height_px), np.int32) * int("0xff00ff", 0))
+        self.Buffer = wx.BitmapFromBufferRGBA(width_px, height_px, np.ones((width_px, height_px), np.int32) * int("0xff00ff", 0))
 
-        self.UpdateDrawingBuffered()
+        self.RedrawMap()
 
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_MOTION, self.OnMove)
 
-    def UpdateDrawingBuffered(self):
+    def RedrawMap(self):
 
         dc = wx.MemoryDC()
-        dc.SelectObject(self._Buffer)
-        #dc.Clear()
+        dc.SelectObject(self.Buffer)
 
         for (rownum, colnum), value in np.ndenumerate(self.currentmap.tiles):
             if self.currentmap.terrain[rownum, colnum] > 0:
@@ -152,7 +149,7 @@ class MapPanelWrapper(MapPanel):
                 self.putImage(dc, "selected_border_red.png", rownum, colnum)
 
         for (rownum, colnum), value in np.ndenumerate(self.currentmap.tiles):
-            print (rownum, colnum), value
+            #print (rownum, colnum), value
             unit_id, unit_color, unit_health = self.currentmap.board[:, rownum, colnum]
             if unit_id > 0:
                 self.putImage(dc, "%s_%s.png" % (colors.type[unit_color].name, units.type[unit_id].picture), rownum, colnum)
@@ -168,14 +165,13 @@ class MapPanelWrapper(MapPanel):
             coords1, coords2, width, color = x
             self.drawArrow(gc, coords1, coords2, width, color)
 
-        #self.showBattleResult(gc, 1, 2, 0, 10, 2, 5, 5, 3)
-
         b = dc.GetAsBitmap()
+        del dc
+
         b.SetMaskColour("#FF00FF")
         self.setInnerBitmap(b)
 
-        del dc
-        self.Refresh(eraseBackground=False)
+        #self.Refresh(eraseBackground=False)
         self.Update()
 
     def drawArrow(self, gc, coords1, coords2, width, color):
@@ -210,13 +206,13 @@ class MapPanelWrapper(MapPanel):
 #        print event
 
     def OnMove(self, e):
-
         row, col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
-        print row, col
+        vrow, vcol = hexlib.pixel_to_hexcoords(self.GetVirtualPosition(e.GetPosition()), self.currentmap.width, self.currentmap.height)
+        print row, col, vrow, vcol
 
     def OnLeftUp(self, e):
 
-        row, col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
+        row, col = hexlib.pixel_to_hexcoords(self.GetVirtualPosition(e.GetPosition()), self.currentmap.width, self.currentmap.height)
 
         if self.mode == UNSELECTED:
             unit_type, unit_color, unit_health = self.currentmap.board[:, row, col]
@@ -256,7 +252,7 @@ class MapPanelWrapper(MapPanel):
 
         elif self.mode == MOVING:
 
-            row, col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
+            row, col = hexlib.pixel_to_hexcoords(self.GetVirtualPosition(e.GetPosition()), self.currentmap.width, self.currentmap.height)
 
             source_row, source_col = self.sourceTile
             print "DISTANCE:", getDistance(row, col, source_row, source_col)
@@ -291,7 +287,7 @@ class MapPanelWrapper(MapPanel):
 
         elif self.mode == MOVING_CONFIRM:
 
-            row, col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
+            row, col = hexlib.pixel_to_hexcoords(self.GetVirtualPosition(e.GetPosition()), self.currentmap.width, self.currentmap.height)
 
             ## unselect
             if (row, col) != self.selectedTile:
@@ -325,7 +321,7 @@ class MapPanelWrapper(MapPanel):
 
         elif self.mode == ATTACKING:
 
-            defending_row, defending_col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
+            defending_row, defending_col = hexlib.pixel_to_hexcoords(self.GetVirtualPosition(e.GetPosition()), self.currentmap.width, self.currentmap.height)
             attacking_row, attacking_col = self.selectedTile
 
             defending_type, defending_color, defending_health = self.currentmap.board[:, defending_row, defending_col]
@@ -339,7 +335,8 @@ class MapPanelWrapper(MapPanel):
 
             self.GetParent().battle_result_panel.showBattleResult(attacking_color, attacking_type, 1, attacking_left, defending_color, defending_type, 1, defending_left)
 
-        self.UpdateDrawingBuffered()
+        self.RedrawMap()
+        self.UpdateDrawing()
 
     def putImage(self, dc, img, row, col):
         png = wx.Bitmap(img)
