@@ -19,7 +19,6 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
         dc = wx.MemoryDC()
         dc.SelectObject(self.background)
-        #dc.Clear()
 
         tile_width, tile_height = self.background_tile.Size
         for rownum in range(int(screen_height / tile_height)):
@@ -29,7 +28,6 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
         width_px, height_px = size
         wx.lib.scrolledpanel.ScrolledPanel.__init__(self, parent, size=(width_px, height_px))
 
-        #self.SetBackgroundColour("#F0F0F0")
         self.SetupScrolling()
         self.SetScrollRate(1, 1)
 
@@ -39,15 +37,13 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
         #self.OnResize(None)
 
     def setInnerBitmap(self, bitmap):
-        print "setInnerBitmap"
         self.innerbitmap = bitmap
 
     def GetVirtualPosition(self, (x, y)):
-        return x - self.virtual_x, y - self.virtual_y
+        scrolled_x, scrolled_y = self.CalcScrolledPosition((self.virtual_x, self.virtual_y))
+        return x - scrolled_x, y - scrolled_y
 
     def UpdateDrawing(self):
-
-        print "UpdateDrawing"
 
         dc = wx.MemoryDC()
         dc.SelectObject(self._Buffer)
@@ -55,17 +51,14 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
         self_width, self_height = self.InnerSize
         sizer_width, sizer_height = self.GetSize()
 
-        posx = max(0, (sizer_width - self_width) / 2)
-        posy = max(0, (sizer_height - self_height) / 2)
-
-        self.virtual_x, self.virtual_y = self.CalcScrolledPosition((posx, posy))
+        self.virtual_x = max(0, (sizer_width - self_width) / 2)
+        self.virtual_y = max(0, (sizer_height - self_height) / 2)
 
         tile_width, tile_height = self.background_tile.Size
         offset_x, offset_y = self.virtual_x % tile_width, self.virtual_y % tile_height
 
         dc.DrawBitmap(self.background, offset_x - tile_width, offset_y - tile_height)
         if self.innerbitmap:
-            print "UpdateDrawing Virtual x/y", self.virtual_x, self.virtual_y
             dc.DrawBitmap(self.innerbitmap, self.virtual_x, self.virtual_y, True)
 
         del dc
@@ -75,7 +68,6 @@ class MapPanel(wx.lib.scrolledpanel.ScrolledPanel):
     def OnPaint(self, e):
         dc = wx.PaintDC(self)
         x, y = self.CalcScrolledPosition((0, 0))
-        print "OnPaint x/y width/height", x, y, self._Buffer.Size
         dc.DrawBitmap(self._Buffer, x, y)
 
     def OnResize(self, e):
@@ -113,9 +105,7 @@ if __name__ == "__main__":
             self.SetSizer(self.box)
             self.Layout()
 
-            self.Bind(wx.EVT_PAINT, self.OnPaint)
-
-        def OnPaint(self, e):
+            #self.Bind(wx.EVT_PAINT, self.OnPaint)
             self.mappanel.setInnerBitmap(self.foreground)
 
 

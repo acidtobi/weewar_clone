@@ -14,6 +14,7 @@ import aux_functions
 from battleresult import BattleResultPanel
 import os
 from mappanel import MapPanel
+import wx.animate
 
 from pprint import pprint
 
@@ -42,11 +43,6 @@ class MainFrame(wx.Frame):
 
     def __init__(self, parent, title):
 
-        #First retrieve the screen size of the device
-        #screenSize = wx.DisplaySize()
-        #screenWidth = screenSize[0]
-        #screenHeight = screenSize[1]
-
         wx.Frame.__init__(self, parent, title=title, size=(800, 650))
 
         self.mappanel = MapPanelWrapper(self, maps.maps[0]) # , pos=(200, 200)
@@ -71,6 +67,14 @@ class MainFrame(wx.Frame):
         self.battle_result_panel.SetBackgroundColour("WHITE")
         self.battle_result_panel.Hide()
 
+        gif_fname = "loading.gif"
+        #gif_fname = "main_loading_black_60.gif"
+        gif = wx.animate.GIFAnimationCtrl(leftpanel, -1, gif_fname, pos=(10, 10))
+        gif.GetPlayer().UseBackgroundColour(True)
+
+        self.gif = gif
+        self.gif.Play()
+
         self.SetAutoLayout(True)
 #        self.SetSizer(self.box)
         self.SetSizer(self.box2)
@@ -88,6 +92,13 @@ class MainFrame(wx.Frame):
             leftpanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="left_bar.png": self.createBackgroundImage(evt, temp))
         #btn_stayhere.Bind(wx.EVT_LEFT_UP, self.battle_result_panel._showBattleResult)
 
+    def CallMeLater(self, play=True):
+
+        if play:
+            self.gif.Play()
+        else:
+            self.gif.Stop()
+
     def createBackgroundImage(self, evt, img):
 
         dc = evt.GetDC()
@@ -103,7 +114,7 @@ class MainFrame(wx.Frame):
     def OnResize(self, e):
         self.battle_result_panel.CentreOnParent()
 
-        ## skip this event handler so that OnResize of superclass is called too
+        ## skip this event handler so that SIZE event of superclass is processed too
         e.Skip()
 
 class MapPanelWrapper(MapPanel):
@@ -121,9 +132,6 @@ class MapPanelWrapper(MapPanel):
         width_px, height_px = self.currentmap.width * 32 + 16, self.currentmap.height * 26 + 8
 
         MapPanel.__init__(self, parent, background_tile=wx.Bitmap("logo_background_repeating.png"), size=(width_px, height_px))
-        #self.SetBackgroundColour("#F0F0F0")
-        #self.SetupScrolling()
-        self.SetScrollRate(1, 1)
 
         ## create buffer with mask
         self.Buffer = wx.BitmapFromBufferRGBA(width_px, height_px, np.ones((width_px, height_px), np.int32) * int("0xff00ff", 0))
@@ -149,7 +157,6 @@ class MapPanelWrapper(MapPanel):
                 self.putImage(dc, "selected_border_red.png", rownum, colnum)
 
         for (rownum, colnum), value in np.ndenumerate(self.currentmap.tiles):
-            #print (rownum, colnum), value
             unit_id, unit_color, unit_health = self.currentmap.board[:, rownum, colnum]
             if unit_id > 0:
                 self.putImage(dc, "%s_%s.png" % (colors.type[unit_color].name, units.type[unit_id].picture), rownum, colnum)
@@ -161,7 +168,6 @@ class MapPanelWrapper(MapPanel):
         gc = wx.GraphicsContext.Create(dc)
         gc.SetAntialiasMode(True)
         for x in self.arrows:
-            print x
             coords1, coords2, width, color = x
             self.drawArrow(gc, coords1, coords2, width, color)
 
@@ -206,9 +212,13 @@ class MapPanelWrapper(MapPanel):
 #        print event
 
     def OnMove(self, e):
-        row, col = hexlib.pixel_to_hexcoords(e.GetPosition(), self.currentmap.width, self.currentmap.height)
-        vrow, vcol = hexlib.pixel_to_hexcoords(self.GetVirtualPosition(e.GetPosition()), self.currentmap.width, self.currentmap.height)
-        print row, col, vrow, vcol
+        row, col = hexlib.pixel_to_hexcoords(self.GetVirtualPosition(e.GetPosition()), self.currentmap.width, self.currentmap.height)
+        #row, col = max(0, row), max(0, col)
+        height, width = self.currentmap.terrain.shape
+
+        if 0 <= row < height and 0 <= col < width:
+            if self.currentmap.terrain[row, col] > 0:
+                print "BOARD:", self.currentmap.terrain[row, col]
 
     def OnLeftUp(self, e):
 
