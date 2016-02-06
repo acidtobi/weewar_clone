@@ -21,30 +21,21 @@ class BattleResultPanel(wx.Panel):
         wx.Panel.__init__(self, parent, style=wx.RAISED_BORDER, size=(width_px, height_px))
 
         self.btn_continue = wx.Button(self, -1, "Continue game", (70, 145))
-        self.btn_continue.SetBackgroundColour('#cce5ff')
+        self.btn_continue.SetBackgroundColour('#CCE5FF')
 
-        self._Buffer = wx.EmptyBitmap(width_px, height_px)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_LEFT_UP, self.onClick)
-        self.btn_continue.Bind(wx.EVT_LEFT_UP, self.onClick)
+        self.Bind(wx.EVT_LEFT_UP, self.OnClick)
+        self.btn_continue.Bind(wx.EVT_LEFT_UP, self.OnClick)
 
-    def onClick(self, e):
+    def OnClick(self, e):
         self.Hide()
 
     def OnPaint(self, e):
         dc = wx.PaintDC(self)
-        dc.DrawBitmap(self._Buffer, 0, 0)
-
-    def UpdateDrawingBuffered(self):
 
         width, height = self.GetVirtualSize()
 
         border = 20
-        image_width, image_height = 32, 34
-
-        dc = wx.MemoryDC()
-        dc.SelectObject(self._Buffer)
-        dc.Clear()
 
         dc.SetPen(wx.Pen("#C0C0C0", style=wx.SOLID))
         dc.DrawLine(border, 30, width - border, 30)
@@ -73,21 +64,7 @@ class BattleResultPanel(wx.Panel):
         button_width, button_height = self.btn_continue.GetVirtualSize()
         self.btn_continue.SetPosition(((width - button_width) / 2, 135 + (55 - button_height) / 2))
 
-        del dc
-        self.Refresh(eraseBackground=False)
-        self.Update()
-
-    def _showBattleResult(self):
-        if self.IsShown():
-            self.Hide()
-        else:
-            self.showBattleResult(1, 2, 0, 10, 2, 5, 5, 3)
-            self.Show()
-
     def showBattleResult(self, attacking_color, attacking_type, attacking_lost, attacking_left, defending_color, defending_type, defending_lost, defending_left):
-
-        if not self.IsShown():
-            self.Show()
 
         self.attacking_color = attacking_color
         self.attacking_type = attacking_type
@@ -97,14 +74,15 @@ class BattleResultPanel(wx.Panel):
         self.defending_type = defending_type
         self.defending_lost = defending_lost
         self.defending_left = defending_left
-        self.UpdateDrawingBuffered()
+
+        if not self.IsShown():
+            self.Show()
 
     def putUnitTypeImage(self, type, color, x, y):
         image = wx.Image("%s_%s.png" % (colors.type[color].name, units.type[type].picture), wx.BITMAP_TYPE_ANY)
         wx.StaticBitmap(self, wx.ID_ANY, wx.BitmapFromImage(image), pos=(x, y))
 
     def putCenteredText(self, gc, str, fontsize, color, style, x, y):
-
         font = wx.Font(fontsize, wx.DEFAULT, wx.NORMAL, style)
         gc.SetFont(font, color)
         txtWidth, txtWeight, txtDescent, txtExternalLeading = gc.GetFullTextExtent(str)
