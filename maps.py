@@ -156,4 +156,4 @@ for m in maps:
 for m in maps:
     pprint(vars(m))
 
-print hexlib.rings(maps[0].terrain.shape, 5, 5, 2)
+#print hexlib.rings(maps[0].terrain.shape, 5, 5, 2)

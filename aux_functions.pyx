@@ -13,8 +13,8 @@ cimport cython
 @cython.nonecheck(False) # turn of bounds-checking for entire function
 
 def find_paths(np.ndarray[long, ndim=2] visited,
-               np.ndarray[long, ndim=2]  zoc,
-               np.ndarray[long, ndim=2]  movecost,
+               np.ndarray[long, ndim=2] zoc,
+               np.ndarray[long, ndim=2] movecost,
                int start_row,
                int start_col,
                int points_left):

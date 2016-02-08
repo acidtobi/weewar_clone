@@ -15,6 +15,7 @@ from battleresult import BattleResultPanel
 import os
 from mappanel import MapPanel
 import wx.animate
+import battle
 
 from pprint import pprint
 
@@ -43,7 +44,10 @@ class MainFrame(wx.Frame):
 
     def __init__(self, parent, title):
 
-        wx.Frame.__init__(self, parent, title=title, size=(800, 650))
+        wx.Frame.__init__(self, parent, title=title, size=(800, 680))
+
+        self.icon = wx.Icon("icon.ico", wx.BITMAP_TYPE_ICO)
+        self.SetIcon(self.icon)
 
         self.mappanel = MapPanelWrapper(self, maps.maps[0]) # , pos=(200, 200)
 
@@ -69,7 +73,7 @@ class MainFrame(wx.Frame):
 
         gif_fname = "loading.gif"
         #gif_fname = "main_loading_black_60.gif"
-        gif = wx.animate.GIFAnimationCtrl(leftpanel, -1, gif_fname, pos=(10, 10))
+        gif = wx.animate.GIFAnimationCtrl(leftpanel, -1, gif_fname, pos=(10, 550))
         gif.GetPlayer().UseBackgroundColour(True)
 
         self.gif = gif
@@ -92,12 +96,11 @@ class MainFrame(wx.Frame):
             leftpanel.Bind(wx.EVT_ERASE_BACKGROUND, lambda evt, temp="left_bar.png": self.createBackgroundImage(evt, temp))
         #btn_stayhere.Bind(wx.EVT_LEFT_UP, self.battle_result_panel._showBattleResult)
 
-    def CallMeLater(self, play=True):
-
-        if play:
-            self.gif.Play()
-        else:
-            self.gif.Stop()
+    #def CallMeLater(self, play=True):
+        #if play:
+        #    self.gif.Play()
+        #else:
+        #    self.gif.Stop()
 
     def createBackgroundImage(self, evt, img):
 
@@ -123,11 +126,15 @@ class MapPanelWrapper(MapPanel):
 
         self.currentmap = currentmap
         self.mode = UNSELECTED
+
         self.overlays = np.zeros_like(self.currentmap.terrain)
+        self.red_counters = np.ones_like(self.currentmap.terrain) * -1
+
         self.selectedTile = None
         self.sourceTile = None
         self.original_board = None
         self.arrows = []
+        self.circles = []
 
         width_px, height_px = self.currentmap.width * 32 + 16, self.currentmap.height * 26 + 8
 
@@ -162,6 +169,9 @@ class MapPanelWrapper(MapPanel):
                 self.putImage(dc, "%s_%s.png" % (colors.type[unit_color].name, units.type[unit_id].picture), rownum, colnum)
                 self.putImage(dc, "counter_%s.png" % unit_health, rownum, colnum)
 
+            if self.red_counters[rownum, colnum] > -1:
+                self.putImage(dc, "counter_%d_red.png" % self.red_counters[rownum, colnum], rownum, colnum)
+
             if self.overlays[rownum, colnum] & SHADED:
                 self.putImage(dc, "selected_overlay.png", rownum, colnum)
 
@@ -170,6 +180,20 @@ class MapPanelWrapper(MapPanel):
         for x in self.arrows:
             coords1, coords2, width, color = x
             self.drawArrow(gc, coords1, coords2, width, color)
+
+        for coords, text in self.circles:
+
+            x, y = coords
+
+            gc.SetBrush(wx.Brush("#E60000", wx.SOLID))
+            #gc.SetPen(wx.TRANSPARENT_PEN)
+            gc.SetPen(wx.Pen(wx.BLACK, 1, wx.SOLID))
+            gc.DrawRoundedRectangle(x, y, 12, 12, 3)
+            font = wx.Font(6, wx.DEFAULT, wx.NORMAL, wx.BOLD)
+            gc.SetFont(font, wx.WHITE)
+            txtWidth, txtWeight, txtDescent, txtExternalLeading = gc.GetFullTextExtent(text)
+            gc.DrawText(text, int(x + 6 - (txtWidth / 2)), int(y + 6 - (txtWeight / 2)))
+            #gc.DrawText(text, x, y)
 
         b = dc.GetAsBitmap()
         del dc
@@ -204,8 +228,6 @@ class MapPanelWrapper(MapPanel):
                       c2 - ortho + (5 * norm),
                       c1 - ortho])
 
-        font = wx.Font(24, wx.DEFAULT, wx.NORMAL, wx.BOLD)
-        gc.SetFont(font, wx.BLACK)
 
 #    def onMouseMove(self, event):
 #        self.panel.SetFocus()
@@ -337,13 +359,28 @@ class MapPanelWrapper(MapPanel):
             defending_type, defending_color, defending_health = self.currentmap.board[:, defending_row, defending_col]
             attacking_type, attacking_color, attacking_health = self.currentmap.board[:, attacking_row, attacking_col]
 
-            print attacking_type, attacking_color, attacking_health
-            print defending_type, defending_color, defending_health
+            attacking_terrain = self.currentmap.terrain[attacking_row, attacking_col]
+            defending_terrain = self.currentmap.terrain[defending_row, defending_col]
 
-            defending_left = defending_health - 1
-            attacking_left = attacking_health - 1
+            #print attacking_type, attacking_color, attacking_health
+            #print defending_type, defending_color, defending_health
 
-            self.GetParent().battle_result_panel.showBattleResult(attacking_color, attacking_type, 1, attacking_left, defending_color, defending_type, 1, defending_left)
+            attacking_left, defending_left = battle.evaluate(attacking_type, attacking_health, attacking_terrain, defending_type, defending_health, defending_terrain)
+
+            self.red_counters[attacking_row, attacking_col] = attacking_health - attacking_left
+            self.red_counters[defending_row, defending_col] = defending_health - defending_left
+
+            #self.circles.append([hexlib.hexcoords_to_pixel((defending_row, defending_col), self.currentmap.width, self.currentmap.height), "-5"])
+            #self.circles.append([hexlib.hexcoords_to_pixel((attacking_row, attacking_col), self.currentmap.width, self.currentmap.height), "X"])
+
+            self.GetParent().battle_result_panel.showBattleResult(attacking_color,
+                                                                  attacking_type,
+                                                                  attacking_health - attacking_left,
+                                                                  attacking_left,
+                                                                  defending_color,
+                                                                  defending_type,
+                                                                  defending_health - defending_left,
+                                                                  defending_left)
 
         self.RedrawMap()
         self.UpdateDrawing()
