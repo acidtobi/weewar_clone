@@ -121,6 +121,7 @@ class YesNoDialog(wx.Panel):
 
         width_px = 250
         height_px = 120
+        button_width = 90
 
         wx.Panel.__init__(self, parent, style=wx.RAISED_BORDER, size=(width_px, height_px))
 
@@ -129,8 +130,14 @@ class YesNoDialog(wx.Panel):
         self.dragging = False
         self.anchor = 0, 0
 
-        self.btn_yes = wx.Button(self, -1, "Yes", (40, 85))
-        self.btn_no = wx.Button(self, -1, "No", (150, 85))
+        self.btn_yes = wx.Button(self, -1, "Yes")
+        self.btn_yes.Size = button_width, self.btn_yes.Size[1]
+        self.btn_yes.Position = (width_px / 4) - (self.btn_yes.Size[0] / 2), 75
+
+        self.btn_no = wx.Button(self, -1, "No")
+        self.btn_no.Size = button_width, self.btn_no.Size[1]
+        self.btn_no.Position = (width_px * 3 / 4) - (self.btn_yes.Size[0] / 2), 75
+
         self.btn_yes.SetBackgroundColour('#CCE5FF')
         self.btn_no.SetBackgroundColour('#CCE5FF')
 
@@ -150,6 +157,7 @@ class YesNoDialog(wx.Panel):
         gc = wx.GraphicsContext.Create(dc)
         gc.SetAntialiasMode(True)
         self.putCenteredText(gc, "Stay here?", 10, "#808080", wx.BOLD, self.GetSize()[0] / 2, 30)
+        self.putCenteredText(gc, "(and do not attack)", 10, "#808080", wx.NORMAL, self.GetSize()[0] / 2, 50)
 
     def OnShow(self, e):
         print "OnShow"
