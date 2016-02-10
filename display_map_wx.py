@@ -67,10 +67,6 @@ class MainFrame(wx.Frame):
         self.box2.Add(toppanel, 0, wx.EXPAND)
         self.box2.Add(self.box, 2, wx.EXPAND)
 
-        self.battle_result_panel = BattleResultPanel(self.mappanel)
-        self.battle_result_panel.SetBackgroundColour("WHITE")
-        self.battle_result_panel.Hide()
-
         gif_fname = "loading.gif"
         #gif_fname = "main_loading_black_60.gif"
         gif = wx.animate.GIFAnimationCtrl(leftpanel, -1, gif_fname, pos=(10, 550))
@@ -115,10 +111,71 @@ class MainFrame(wx.Frame):
         dc.DrawBitmap(bmp, 0, 0)
 
     def OnResize(self, e):
-        self.battle_result_panel.CentreOnParent()
-
         ## skip this event handler so that SIZE event of superclass is processed too
         e.Skip()
+
+
+class YesNoDialog(wx.Panel):
+
+    def __init__(self, parent):
+
+        width_px = 250
+        height_px = 120
+
+        wx.Panel.__init__(self, parent, style=wx.RAISED_BORDER, size=(width_px, height_px))
+
+        self.SetBackgroundColour(wx.WHITE)
+
+        self.dragging = False
+        self.anchor = 0, 0
+
+        self.btn_yes = wx.Button(self, -1, "Yes", (40, 85))
+        self.btn_no = wx.Button(self, -1, "No", (150, 85))
+        self.btn_yes.SetBackgroundColour('#CCE5FF')
+        self.btn_no.SetBackgroundColour('#CCE5FF')
+
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_MOTION, self.OnMove)
+        self.Bind(wx.EVT_SHOW, self.OnShow)
+        self.btn_yes.Bind(wx.EVT_LEFT_UP, self.OnClick)
+        self.btn_no.Bind(wx.EVT_LEFT_UP, self.OnClick)
+
+        self.CentreOnParent()
+
+
+    def OnPaint(self, e):
+        dc = wx.PaintDC(self)
+        gc = wx.GraphicsContext.Create(dc)
+        gc.SetAntialiasMode(True)
+        self.putCenteredText(gc, "Stay here?", 10, "#808080", wx.BOLD, self.GetSize()[0] / 2, 30)
+
+    def OnShow(self, e):
+        print "OnShow"
+        self.CentreOnParent()
+
+    def OnClick(self, e):
+        self.Hide()
+
+    def OnLeftDown(self, e):
+        self.dragging = True
+        self.anchor = e.GetPosition()
+
+    def OnLeftUp(self, e):
+        self.dragging = False
+
+    def OnMove(self, e):
+
+        if self.dragging:
+            pos = self.GetPosition()[0] - self.anchor[0] + e.GetPosition()[0], self.GetPosition()[1] - self.anchor[1] + e.GetPosition()[1]
+            self.SetPosition(pos)
+
+    def putCenteredText(self, gc, str, fontsize, color, style, x, y):
+        font = wx.Font(fontsize, wx.DEFAULT, wx.NORMAL, style)
+        gc.SetFont(font, color)
+        txtWidth, txtWeight, txtDescent, txtExternalLeading = gc.GetFullTextExtent(str)
+        gc.DrawText(str, x - (txtWidth / 2), y - (txtWeight / 2))
 
 class MapPanelWrapper(MapPanel):
 
@@ -143,10 +200,19 @@ class MapPanelWrapper(MapPanel):
         ## create buffer with mask
         self.Buffer = wx.BitmapFromBufferRGBA(width_px, height_px, np.ones((width_px, height_px), np.int32) * int("0xff00ff", 0))
 
+        self.battle_result_panel = BattleResultPanel(self)
+        self.battle_result_panel.SetBackgroundColour("WHITE")
+        self.battle_result_panel.Hide()
+
         self.RedrawMap()
 
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_MOTION, self.OnMove)
+        self.Bind(wx.EVT_SIZE, self.OnResize)
+
+    def OnResize(self, e):
+        self.battle_result_panel.CentreOnParent()
+        super(MapPanelWrapper, self).OnResize(e)
 
     def RedrawMap(self):
 
@@ -243,6 +309,9 @@ class MapPanelWrapper(MapPanel):
                 print "BOARD:", self.currentmap.terrain[row, col]
 
     def OnLeftUp(self, e):
+
+        if self.battle_result_panel.IsShown():
+            return
 
         row, col = hexlib.pixel_to_hexcoords(self.GetVirtualPosition(e.GetPosition()), self.currentmap.width, self.currentmap.height)
 
@@ -353,6 +422,11 @@ class MapPanelWrapper(MapPanel):
 
         elif self.mode == ATTACKING:
 
+            if self.selectedTile == (row, col):
+                dlg = YesNoDialog(self)
+                dlg.Show()
+                return
+
             defending_row, defending_col = hexlib.pixel_to_hexcoords(self.GetVirtualPosition(e.GetPosition()), self.currentmap.width, self.currentmap.height)
             attacking_row, attacking_col = self.selectedTile
 
@@ -373,7 +447,7 @@ class MapPanelWrapper(MapPanel):
             #self.circles.append([hexlib.hexcoords_to_pixel((defending_row, defending_col), self.currentmap.width, self.currentmap.height), "-5"])
             #self.circles.append([hexlib.hexcoords_to_pixel((attacking_row, attacking_col), self.currentmap.width, self.currentmap.height), "X"])
 
-            self.GetParent().battle_result_panel.showBattleResult(attacking_color,
+            self.battle_result_panel.showBattleResult(attacking_color,
                                                                   attacking_type,
                                                                   attacking_health - attacking_left,
                                                                   attacking_left,
