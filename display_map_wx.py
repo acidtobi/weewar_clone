@@ -46,8 +46,9 @@ class MainFrame(wx.Frame):
 
         wx.Frame.__init__(self, parent, title=title, size=(800, 680))
 
-        self.icon = wx.Icon("icon.ico", wx.BITMAP_TYPE_ICO)
-        self.SetIcon(self.icon)
+        if os.path.isfile("icon.ico"):
+            self.icon = wx.Icon("icon.ico", wx.BITMAP_TYPE_ICO)
+            self.SetIcon(self.icon)
 
         self.mappanel = MapPanelWrapper(self, maps.maps[0]) # , pos=(200, 200)
 
@@ -67,13 +68,13 @@ class MainFrame(wx.Frame):
         self.box2.Add(toppanel, 0, wx.EXPAND)
         self.box2.Add(self.box, 2, wx.EXPAND)
 
-        gif_fname = "loading.gif"
-        #gif_fname = "main_loading_black_60.gif"
-        gif = wx.animate.GIFAnimationCtrl(leftpanel, -1, gif_fname, pos=(10, 550))
-        gif.GetPlayer().UseBackgroundColour(True)
-
-        self.gif = gif
-        self.gif.Play()
+        if os.path.isfile("loading.gif"):
+            gif_fname = "loading.gif"
+            #gif_fname = "main_loading_black_60.gif"
+            gif = wx.animate.GIFAnimationCtrl(leftpanel, -1, gif_fname, pos=(10, 550))
+            gif.GetPlayer().UseBackgroundColour(True)
+            self.gif = gif
+            self.gif.Play()
 
         self.SetAutoLayout(True)
 #        self.SetSizer(self.box)
@@ -426,6 +427,9 @@ class MapPanelWrapper(MapPanel):
                 unit_type, unit_color, unit_health = self.currentmap.board[:, row, col]
                 min_range, max_range = units.type[unit_type].attackrange
                 attackable = sum([hexlib.rings(self.currentmap.terrain.shape, row, col, x) for x in range(min_range, max_range + 1)])
+
+                print "attackable classes:", np.arange(8)[np.array(units.type[unit_type].power) > 0]
+
                 self.overlays[(attackable > 0) & (self.currentmap.board[1, :, :] > 0) & (self.currentmap.board[1, :, :] != unit_color)] = RED_RING
 
         elif self.mode == ATTACKING:
