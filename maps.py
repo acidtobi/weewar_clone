@@ -5,31 +5,141 @@ import terrain
 import units
 import colors
 import hexlib
+import string
 
-NONE = 0
-TERRAIN = 1
-UNITS = 2
-
-mode = NONE
-maps = []
-
-def split_map(map_list, dimensions):
-    return [map_list[i:i + dimensions[1]] for i in xrange(0, dimensions[0] * dimensions[1], dimensions[1])]
 
 class Map(object):
-    def __init__(self):
-        self.name = ""
-        self.credits_per_base = 0
-        self.start_credits = 0
+
+    def __init__(self, name, start_credits, credits_per_base, terrain_string, units_string):
+
+        """
+        Generate Map object from data in config file
+
+        :param name:
+        :param start_credits:
+        :param credits_per_base:
+        :param terrain_string:
+        :param units_string:
+        :return:
+        """
+
+        self.name = name
+        self.credits_per_base = credits_per_base
+        self.start_credits = start_credits
+
+        ## numpy array
         self.board = None
-        self.units_string = ""
+
+        ## numpy array
         self.terrain = None
-        self.terrain_string = ""
-        self.num_columns = []
-        self.num_rows = 0
+
+        ## size: (rows, columns)
+        self.size = (0, 0)
+
+        ## number of columns
+        self.width = 0
+
+        ## number of rows
+        self.height = 0
+
+        ## dict containing unit.Unit objects
         self.units = {}
 
+        ## convert terrain string to python list
+        terrain_list = [re.split("([A-Z\.~][a-z]?)", line)[1::2] for line in string.split(terrain_string, "\n") if line != ""]
+
+        ## convert terrain string to python list
+        units_list = [re.split("([^\s]+)", line)[1::2] for line in string.split(units_string, "\n") if line != ""]
+
+        ## check if all rows have the same number of columns
+        terrain_row_lenghts = set(len(x) for x in terrain_list)
+        if len(terrain_row_lenghts) != 1:
+            raise ValueError('error in terrain data: all rows need to be of equal length')
+
+        ## set width and height
+        self.width = terrain_row_lenghts.pop()
+        self.height = len(terrain_list)
+        self.size = (self.height, self.width)
+
+        # create numpy array for terrain
+        self.terrain = self.map_list_to_numpy_array(terrain_list, terrain.getTerrainID)
+
+        # create numpy array for terrain groups (formerly named "tiles")
+        self.terrain_group = self.map_list_to_numpy_array(terrain_list, terrain.getTerrainGroupID)
+
+        ## create numpy array for board (unit id, color and health)
+        self.board = self. generate_board(self.size, units_list)
+
+        ## generate units dict from board
+        self.units = self.generate_units_dict_from_board(self.board)
+
+    @staticmethod
+    def map_list_to_numpy_array(map_list, id_converter):
+        id_converter_function = np.vectorize(lambda x: id_converter(x))
+        map_array = id_converter_function(np.array(map_list)).astype(np.int32)
+        map_array = hexlib.oddr_to_axial_array(map_array)
+        return map_array
+
+    @staticmethod
+    def generate_board(size, units_list):
+        """
+         create numpy array for units
+
+        :param size:
+        :param units_list:
+        :return:
+        """
+
+        height, width = size
+        board = np.zeros((3, height, width), dtype=np.int32)
+
+        for (row, col), unit_code in np.ndenumerate(np.array(units_list)):
+            if unit_code != ".":
+                unit_id = units.id_from_code(unit_code[0:2])
+                unit_color = unit_code[2]
+                unit_health = int(unit_code[3]) if len(unit_code) > 3 else 10
+
+                color_id = colors.id_from_code(unit_color)
+
+                board[0, row, col] = unit_id
+                board[1, row, col] = color_id
+                board[2, row, col] = unit_health
+
+        board = np.array([hexlib.oddr_to_axial_array(board[x]) for x in range(3)])
+
+        return board
+
+    @staticmethod
+    def generate_units_dict_from_board(board):
+
+        """
+        generates units dict from 3d board numpy array
+
+        Not vey pythonic. I'm ysure this can be simplified or at least vectorized somehow.
+
+        :param board:
+        :return:
+        """
+
+        units_dict = {}
+        for row, col in np.transpose(np.nonzero(board[0] > 0)):
+            unit_id, unit_color, unit_health = board[:, row, col]
+            if unit_color not in units_dict:
+                units_dict[unit_color] = []
+            u = units.Unit(unit_id, unit_color, unit_health, row, col)
+            units_dict[unit_color].append(u)
+
+        return units_dict
+
+
     def zoc(self, unit_class, neutral_color):
+        """
+        Returns numpy array with 1's where a given unit has ZoC
+
+        :param unit_class:
+        :param neutral_color:
+        :return:
+        """
 
         max_row, max_col = self.terrain.shape
 
@@ -50,110 +160,61 @@ class Map(object):
 
         return zoc
 
-current_map = None
 
-terrain_string = ""
-units_string = ""
-with open("maps.cfg") as f:
-    content = f.readlines()
+def load(mapname):
 
-    for line in content:
+    with open("maps.cfg") as f:
+        content = f.read()
 
-        m = re.match("^\[([^\[\]]+)\]$", line)
-        if m:
-            if current_map:
-                maps.append(current_map)
+    ## remove comments
+    content = re.sub("#[^\n]*", "", content)
 
-            current_map = Map()
-            current_map.name = m.groups()[0]
+    ## remove blank lines
+    content = re.sub("[\n]+", "\n", content)
+
+    ## split at [MapName] tags
+    maps = re.split("\[([^\[\]]+)\]", content)
+
+    ## remove empty lines
+    maps = [x for x in maps if x != ""]
+
+    ## join with name tags
+    maps = [maps[x:x + 2] for x in xrange(0, len(maps), 2)]
+
+    for this_map_name, map_data_blob in maps:
+
+        ## ignore all other maps
+        if this_map_name != mapname:
             continue
 
-        m = re.match("terrain:", line)
-        if m:
-            mode = TERRAIN
-            continue
+        ## split at "attribute:" tags
+        map_data = re.split("\n([a-z0-9_]+):", map_data_blob)
 
-        m = re.match("units:", line)
-        if m:
-            mode = UNITS
-            continue
+        ## remove empty lines
+        map_data = [x for x in map_data if x != ""]
 
-        m = re.match("credits_per_base:[^0-9]*([0-9]+)", line)
-        if m:
-            current_map.credits_per_base = int(m.groups()[0])
-            continue
+        ## join with tags
+        map_data = [tuple(map_data[x:x + 2]) for x in xrange(0, len(map_data), 2)]
 
-        m = re.match("start_credits:[^0-9]*([0-9]+)", line)
-        if m:
-            current_map.start_credits = int(m.groups()[0])
-            continue
+        ## convert to dict
+        map_data = dict(map_data)
 
-        if line.strip() == "" or line[0] == "#":
-            continue
+        return Map(name=this_map_name,
+                   start_credits=map_data['start_credits'],
+                   credits_per_base=map_data['credits_per_base'],
+                   terrain_string=map_data['terrain'],
+                   units_string=map_data['units'])
 
-        if mode == TERRAIN:
-            current_map.terrain_string += line[:-1]
-            current_map.num_columns.append(len(re.split("([A-Z\.\~][a-z]?)", line)[1::2]))
-            current_map.num_rows += 1
-
-        if mode == UNITS:
-            current_map.units_string += line[:-1]
-
-    maps.append(current_map)
+    ## if no map with given name was found, return None
+    return None
 
 
-for m in maps:
-    rowlength = set(m.num_columns)
-    if len(rowlength) != 1:
-        raise ValueError('all rows need to be of equal length')
-    rowlength = rowlength.pop()
+#================================================================
+# Tests
+#============================================================
 
-    ## convert map string to python list
-    map_list = re.split("([A-Z\.\~][a-z]?)", m.terrain_string)[1::2]
+this_map = load("Stirling's Aruba")
 
-    m.width = rowlength
-    m.height = len(map_list) / m.width
-
-    splitted_map = split_map(map_list, (m.height, m.width))
-
-    # convert units string to python list
-    splitted_units = split_map(re.split("([A-Za-z0-9]+|\.)", m.units_string)[1::2], (m.height, m.width))
-
-    # create numpy array for tiles
-    g = np.vectorize(lambda x: terrain.getTileID(x))
-    m.tiles = g(np.array(splitted_map)).astype(np.int32)
-    m.tiles = hexlib.oddr_to_axial_array(m.tiles)
-
-    # create numpy array for terrain
-    g = np.vectorize(lambda x: terrain.getTerrainID(x))
-    m.terrain = g(np.array(splitted_map)).astype(np.int32)
-    m.terrain = hexlib.oddr_to_axial_array(m.terrain)
-
-    # create numpy array for units
-    m.board = np.zeros((3, m.height, m.width), dtype=np.int32)
-    for (row, col), unit_code in np.ndenumerate(np.array(splitted_units)):
-        if unit_code != ".":
-            unit_id = units.id_from_code(unit_code[0:2])
-            unit_color = unit_code[2]
-            unit_health = int(unit_code[3]) if len(unit_code)>3 else 10
-
-            color_id = colors.id_from_code(unit_color)
-
-            m.board[0, row, col] = unit_id
-            m.board[1, row, col] = color_id
-            m.board[2, row, col] = unit_health
-
-    m.board = np.array([hexlib.oddr_to_axial_array(m.board[x]) for x in range(3)])
-
-    ## create units dict from numpy array
-    for row, col in np.transpose(np.nonzero(m.board[0] > 0)):
-        unit_id, unit_color, unit_health = m.board[:, row, col]
-        if unit_color not in m.units:
-            m.units[unit_color] = []
-        u = units.Unit(unit_id, unit_color, unit_health, row, col)
-        m.units[unit_color].append(u)
-
-for m in maps:
-    pprint(vars(m))
-
-#print hexlib.rings(maps[0].terrain.shape, 5, 5, 2)
+for color in this_map.units:
+    for u in this_map.units[color]:
+        pprint(vars(u))
