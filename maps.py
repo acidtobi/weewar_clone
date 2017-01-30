@@ -3,9 +3,10 @@ import numpy as np
 from pprint import pprint
 import terrain
 import units
-import colors
+from colors import Color as Color
 import hexlib
 import string
+import sys
 
 
 class Map(object):
@@ -68,7 +69,7 @@ class Map(object):
         self.terrain_group = self.map_list_to_numpy_array(terrain_list, terrain.getTerrainGroupID)
 
         ## create numpy array for board (unit id, color and health)
-        self.board = self. generate_board(self.size, units_list)
+        self.board = self. generate_board(units_list)
 
         ## generate units dict from board
         self.units = self.generate_units_dict_from_board(self.board)
@@ -81,30 +82,26 @@ class Map(object):
         return map_array
 
     @staticmethod
-    def generate_board(size, units_list):
+    def generate_board(units_list):
         """
          create numpy array for units
 
-        :param size:
         :param units_list:
         :return:
         """
 
-        height, width = size
-        board = np.zeros((3, height, width), dtype=np.int32)
+        def unit_code_to_list(unit_code):
 
-        for (row, col), unit_code in np.ndenumerate(np.array(units_list)):
-            if unit_code != ".":
-                unit_id = units.id_from_code(unit_code[0:2])
-                unit_color = unit_code[2]
-                unit_health = int(unit_code[3]) if len(unit_code) > 3 else 10
+            if unit_code == ".":
+                return 0, 0, 0
 
-                color_id = colors.id_from_code(unit_color)
+            unit_id = units.id_from_code(unit_code[0:2])
+            unit_color = unit_code[2]
+            unit_health = int(unit_code[3]) if len(unit_code) > 3 else 10
 
-                board[0, row, col] = unit_id
-                board[1, row, col] = color_id
-                board[2, row, col] = unit_health
+            return unit_id, Color.id(unit_color), unit_health
 
+        board = np.transpose(np.array([map(unit_code_to_list, row) for row in units_list]), (2, 0, 1))
         board = np.array([hexlib.oddr_to_axial_array(board[x]) for x in range(3)])
 
         return board
@@ -115,7 +112,7 @@ class Map(object):
         """
         generates units dict from 3d board numpy array
 
-        Not vey pythonic. I'm ysure this can be simplified or at least vectorized somehow.
+        Not vey pythonic. I'm sure this can be simplified or at least vectorized somehow.
 
         :param board:
         :return:
