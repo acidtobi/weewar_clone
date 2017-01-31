@@ -6,6 +6,8 @@ import units
 from colors import Color as Color
 import hexlib
 import string
+from itertools import groupby
+from operator import attrgetter
 import sys
 
 
@@ -112,21 +114,27 @@ class Map(object):
         """
         generates units dict from 3d board numpy array
 
-        Not vey pythonic. I'm sure this can be simplified or at least vectorized somehow.
-
         :param board:
         :return:
         """
 
-        units_dict = {}
-        for row, col in np.transpose(np.nonzero(board[0] > 0)):
-            unit_id, unit_color, unit_health = board[:, row, col]
-            if unit_color not in units_dict:
-                units_dict[unit_color] = []
-            u = units.Unit(unit_id, unit_color, unit_health, row, col)
-            units_dict[unit_color].append(u)
+        ## get indices of nonempty board positions
+        idx = np.transpose(np.nonzero(board[0] > 0))
 
-        return units_dict
+        ## merge indices with board data
+        ## (there *must* be a simpler way to do this...!)
+        units_list = np.concatenate((np.transpose(board[:, idx[:, 0], idx[:, 1]]), idx), axis=1)
+
+        ## convert lists to Unit objects
+        units_objs = [units.Unit(*x) for x in units_list]
+
+        ## group by color
+        g = groupby(sorted(units_objs, key=attrgetter('color')), attrgetter('color'))
+
+        ## convert to dict
+        units_by_color = dict([(color, list(items)) for color, items in g])
+
+        return units_by_color
 
 
     def zoc(self, unit_class, neutral_color):
